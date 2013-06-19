@@ -1,0 +1,180 @@
+<html>
+<head>
+	<title>Canvas test</title>
+
+	<script type="text/javascript">
+		function draw() {
+			var canvas = document.getElementById('test');
+			canvas.width = 600;
+			canvas.height = 600;
+
+			if (canvas.getContext) {
+
+				var context = canvas.getContext('2d');
+				var forest = new Forest(context, 1);
+
+				for (var i = 0; i < 16; i++) {
+					var plant = new Plant(new Point(300, 300), 2 * Math.PI / 16 * i, 400, 1, 20, 2);
+					plant.SetColor(i * 8, i * 8, i * 8, 0.2 * (i + 1) / 16);
+
+					var plantAnimation = new PlantAnimation(plant, i * 500, 1000);
+
+					forest.AddPlantAnimation(plantAnimation);
+				}
+
+				forest.Grow();
+			}
+		}
+
+		function Forest(context, quality) {
+			var _context = context;
+			var _quality = quality;
+
+			var _plantAnimations = new Array();
+			var _fps = 20;
+			var _frameIntervalMS = 1000 / _fps;
+			var _startAnimationTimeMS;
+			var _totalAnimationTimeMS;
+
+			this.AddPlantAnimation = function(plantAnimation) {
+				_plantAnimations.push(plantAnimation);
+			}
+
+			this.Grow = function() {
+				_startAnimationTimeMS = new Date().getTime();
+				this.DrawFrame();
+			}
+
+			this.DrawFrame = function() {
+				var frameTimeMS = new Date().getTime() - _startAnimationTimeMS;
+				var animating = false;
+
+				context.clearRect(0, 0, _context.canvas.width, _context.canvas.height);
+
+				for (var i = 0; i < _plantAnimations.length; i++) {
+					var plantAnimation = _plantAnimations[i];
+					var plantFrameTimeMS = frameTimeMS - plantAnimation.StartTimeMS;
+
+					if (plantFrameTimeMS >= 0) {
+
+						if (plantFrameTimeMS < plantAnimation.GrowthTimeMS) {
+							animating = true;
+						}
+
+						plantFrameTimeMS = Math.min(plantFrameTimeMS, plantAnimation.GrowthTimeMS);
+						plantAnimation.Plant.RenderStem(_context, _quality, plantFrameTimeMS, plantAnimation.GrowthTimeMS);
+					}
+				}
+
+				if (animating) {
+					var self = this;
+					setTimeout(function() { self.DrawFrame(); }, _frameIntervalMS);
+				}
+			}
+		}
+
+		function Plant(origin, angle, length, twists, baseWidth, branchLevels) {
+			var _origin = origin;
+			var _angle = angle;
+			var _length = length;
+			var _twists = twists;
+			var _baseWidth = baseWidth;
+			var _branchLevels = branchLevels;
+
+			var _r = 0;
+			var _g = 0;
+			var _b = 0;
+			var _a = 1;
+
+			this.SetColor = function(r, g, b, a) {
+				_r = r;
+				_g = g;
+				_b = b;
+				_a = a;
+			}
+
+			this.RenderStem = function(context, quality, growth, totalGrowth) {
+				var segmentLength = 2 + 10 * (1 - quality);
+				var currentPoint = _origin;
+				var currentGrowthLength = _length * (growth / totalGrowth);
+				var growthFactor = currentGrowthLength / _length;
+
+				context.lineCap = "round";
+				context.lineJoin = "round";
+				context.strokeStyle = "rgba(" + _r + "," + _g + "," + _b + "," + _a + ")";
+
+				for (var i = 0; i < currentGrowthLength; i += segmentLength) {
+					var segmentWidth = _baseWidth * (_length - i) / _length * growthFactor;
+					var segmentAngle = this.GetSegmentAngle(i, _length, 0.7 * growthFactor, 0.7 * growthFactor);
+
+					var nextPoint = new Point(segmentLength, 0);
+					nextPoint.Rotate(segmentAngle);
+					nextPoint.Translate(currentPoint);
+
+					context.beginPath();
+					context.lineWidth = segmentWidth;
+					context.moveTo(currentPoint.X, currentPoint.Y);
+					context.lineTo(nextPoint.X, nextPoint.Y);
+					context.stroke();
+
+					currentPoint = nextPoint;
+				}
+			}
+
+			this.GetSegmentAngle = function(currentLength, totalLength, curvyness, loopyness) {
+				return _angle + curvyness * Math.PI * Math.pow(2 * (currentLength / totalLength), 1 + loopyness * 2.5);
+			}
+		}
+
+		function PlantAnimation(plant, startTimeMS, growthTimeMS) {
+			this.Plant = plant;
+			this.StartTimeMS = startTimeMS;
+			this.GrowthTimeMS = growthTimeMS;
+		}
+
+		function Point(x, y) {
+			this.X = x;
+			this.Y = y;
+
+			this.Rotate = function(theta, origin) {
+
+				if (origin == null) {
+					origin = new Point(0, 0);
+				}
+
+				var rx = Math.cos(theta) * (this.X - origin.X) - Math.sin(theta) * (this.Y - origin.Y) + origin.X;
+				var ry = Math.sin(theta) * (this.X - origin.X) + Math.cos(theta) * (this.Y - origin.Y) + origin.Y;
+
+				this.X = rx;
+				this.Y = ry;
+			}
+
+			this.Translate = function(d) {
+				this.X += d.X;
+				this.Y += d.Y;
+			}
+		}
+
+		function Log(message) {
+			var textArea = document.getElementById("log");
+			textArea.value += message + "\n";
+		}
+	</script>
+
+	<style type="text/css">
+		body
+		{
+			height: 100%;
+		}
+		canvas
+		{
+			width: 600px;
+			height: 600px;
+		}
+	</style>
+</head>
+<body onload="draw();">
+	<textarea id="log" style="width: 100%; height: 100px;"></textarea>
+	<canvas id="test"></canvas>
+</body>
+</html>
